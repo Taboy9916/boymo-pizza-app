@@ -5,13 +5,16 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card.j
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select.jsx';
 import { Textarea } from '@/components/ui/textarea.jsx';
 import { ArrowLeft, Upload, Save, Edit } from 'lucide-react';
+import { addExpense } from '../firebase/firestore.js';
 import '../App.css';
 
 const ExpensePage = ({ onBack }) => {
   const [expenseType, setExpenseType] = useState('');
   const [amount, setAmount] = useState('');
-  const [details, setDetails] = useState('');
+  const [description, setDescription] = useState('');
   const [receipt, setReceipt] = useState(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [message, setMessage] = useState('');
   const [isEditing, setIsEditing] = useState(false);
 
   const expenseItems = [
@@ -49,25 +52,47 @@ const ExpensePage = ({ onBack }) => {
     'ລາຍການອື່ນໆ'
   ];
 
-  const handleSave = () => {
-    if (!expenseType) {
-      alert('ກະລຸນາເລືອກປະເພດລາຍຈ່າຍ');
-      return;
-    }
-    if (!amount || amount <= 0) {
-      alert('ກະລຸນາປ້ອນຈຳນວນເງິນທີ່ຖືກຕ້ອງ');
+  const handleSave = async () => {
+    if (!expenseType || !amount) {
+      setMessage('ກະລຸນາປ້ອນຂໍ້ມູນໃຫ້ຄົບຖ້ວນ');
       return;
     }
 
-    // Validate amount is a number
-    if (isNaN(parseFloat(amount))) {
-      alert('ຈຳນວນເງິນຕ້ອງເປັນຕົວເລກເທົ່ານັ້ນ');
+    if (isNaN(parseFloat(amount)) || parseFloat(amount) <= 0) {
+      setMessage('ກະລຸນາປ້ອນຈຳນວນເງິນທີ່ຖືກຕ້ອງ');
       return;
     }
 
-    // Save logic here
-    alert('ບັນທຶກລາຍຈ່າຍສຳເລັດ!');
-    onBack();
+    setIsLoading(true);
+    setMessage('');
+
+    try {
+      const expenseData = {
+        type: expenseType,
+        amount: parseFloat(amount),
+        description: description || ''
+      };
+
+      const result = await addExpense(expenseData);
+      
+      if (result.success) {
+        setMessage('ບັນທຶກລາຍຈ່າຍສຳເລັດ!');
+        // Reset form
+        setExpenseType('');
+        setAmount('');
+        setDescription('');
+        setReceipt(null);
+        
+        // Auto hide message after 3 seconds
+        setTimeout(() => setMessage(''), 3000);
+      } else {
+        setMessage('ເກີດຂໍ້ຜິດພາດ: ' + result.error);
+      }
+    } catch (error) {
+      setMessage('ເກີດຂໍ້ຜິດພາດ: ' + error.message);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleFileUpload = (event) => {
@@ -180,7 +205,14 @@ const ExpensePage = ({ onBack }) => {
               <h4 className="font-semibold text-red-800 mb-2">ສະຫຼຸບລາຍຈ່າຍ:</h4>
               <p className="text-sm text-red-700">ປະເພດ: {expenseType}</p>
               <p className="text-sm text-red-700">ຈຳນວນ: {parseFloat(amount).toLocaleString()} ກີບ</p>
-              {details && <p className="text-sm text-red-700">ລາຍລະອຽດ: {details}</p>}
+              {description && <p className="text-sm text-red-700">ລາຍລະອຽດ: {description}</p>}
+            </div>
+          )}
+
+          {/* Message Display */}
+          {message && (
+            <div className={`p-3 rounded-lg ${message.includes('ສຳເລັດ') ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+              {message}
             </div>
           )}
 
@@ -188,11 +220,11 @@ const ExpensePage = ({ onBack }) => {
           <div className="flex space-x-2 pt-4">
             <Button
               onClick={handleSave}
-              className="flex-1 bg-red-600 hover:bg-red-700 text-white"
-              disabled={!expenseType || !amount || isNaN(parseFloat(amount))}
+              disabled={isLoading || !expenseType || !amount || isNaN(parseFloat(amount))}
+              className="flex-1 bg-red-600 hover:bg-red-700 text-white disabled:opacity-50"
             >
               <Save className="h-4 w-4 mr-2" />
-              ບັນທຶກ
+              {isLoading ? 'ກຳລັງບັນທຶກ...' : 'ບັນທຶກ'}
             </Button>
             <Button
               onClick={() => setIsEditing(!isEditing)}

@@ -1,69 +1,48 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button.jsx';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card.jsx';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select.jsx';
 import { ArrowLeft, BarChart3, TrendingUp, DollarSign, Minus } from 'lucide-react';
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
+import { getFinancialSummary } from '../firebase/firestore.js';
 import '../App.css';
 
 const ReportsPage = ({ onBack }) => {
   const [reportPeriod, setReportPeriod] = useState('today');
+  const [financialData, setFinancialData] = useState({
+    income: 0,
+    expense: 0,
+    profit: 0,
+    chartData: []
+  });
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState('');
 
-  // Sample data - in real app this would come from database
-  const sampleData = {
-    today: {
-      income: 450000,
-      expense: 180000,
-      profit: 270000,
-      chartData: [
-        { name: '08:00', income: 65000, expense: 20000 },
-        { name: '10:00', income: 85000, expense: 30000 },
-        { name: '12:00', income: 129000, expense: 45000 },
-        { name: '14:00', income: 99000, expense: 35000 },
-        { name: '16:00', income: 72000, expense: 25000 },
-        { name: '18:00', income: 0, expense: 25000 }
-      ]
-    },
-    week: {
-      income: 2850000,
-      expense: 1200000,
-      profit: 1650000,
-      chartData: [
-        { name: 'ຈັນ', income: 450000, expense: 180000 },
-        { name: 'ອັງຄານ', income: 380000, expense: 160000 },
-        { name: 'ພຸດ', income: 520000, expense: 200000 },
-        { name: 'ພະຫັດ', income: 410000, expense: 170000 },
-        { name: 'ສຸກ', income: 680000, expense: 250000 },
-        { name: 'ເສົາ', income: 410000, expense: 240000 }
-      ]
-    },
-    month: {
-      income: 12500000,
-      expense: 5200000,
-      profit: 7300000,
-      chartData: [
-        { name: 'ອາທິດ 1', income: 2850000, expense: 1200000 },
-        { name: 'ອາທິດ 2', income: 3200000, expense: 1350000 },
-        { name: 'ອາທິດ 3', income: 3100000, expense: 1300000 },
-        { name: 'ອາທິດ 4', income: 3350000, expense: 1350000 }
-      ]
-    },
-    year: {
-      income: 145000000,
-      expense: 62000000,
-      profit: 83000000,
-      chartData: [
-        { name: 'ມ.ກ.', income: 12500000, expense: 5200000 },
-        { name: 'ກ.ພ.', income: 11800000, expense: 4900000 },
-        { name: 'ມ.ນ.', income: 13200000, expense: 5500000 },
-        { name: 'ເມ.ສ.', income: 12900000, expense: 5300000 },
-        { name: 'ພ.ພ.', income: 13500000, expense: 5600000 },
-        { name: 'ມິ.ຖ.', income: 14200000, expense: 5900000 }
-      ]
+  // Fetch financial data when period changes
+  useEffect(() => {
+    fetchFinancialData();
+  }, [reportPeriod]);
+
+  const fetchFinancialData = async () => {
+    setIsLoading(true);
+    setError('');
+    
+    try {
+      const result = await getFinancialSummary(reportPeriod);
+      
+      if (result.success) {
+        setFinancialData(result.data);
+      } else {
+        setError('ບໍ່ສາມາດດຶງຂໍ້ມູນໄດ້: ' + result.error);
+      }
+    } catch (error) {
+      setError('ເກີດຂໍ້ຜິດພາດ: ' + error.message);
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  const currentData = sampleData[reportPeriod];
+  const currentData = financialData;
 
   const pieData = [
     { name: 'ລາຍຮັບ', value: currentData.income, color: '#10b981' },
@@ -110,9 +89,19 @@ const ReportsPage = ({ onBack }) => {
                 <SelectItem value="year">ປີນີ້</SelectItem>
               </SelectContent>
             </Select>
+            {isLoading && <span className="text-sm text-gray-500">ກຳລັງໂຫຼດ...</span>}
           </div>
         </CardContent>
       </Card>
+
+      {/* Error Display */}
+      {error && (
+        <Card className="border-red-500 border-2 mb-6">
+          <CardContent className="p-4">
+            <div className="text-red-600">{error}</div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">

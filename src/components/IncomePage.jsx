@@ -1,21 +1,24 @@
-import { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { ArrowLeft, Upload, Save, Edit } from 'lucide-react';
+import { addIncome } from '../firebase/firestore';
 import { Button } from '@/components/ui/button.jsx';
 import { Input } from '@/components/ui/input.jsx';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card.jsx';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select.jsx';
 import { Textarea } from '@/components/ui/textarea.jsx';
-import { ArrowLeft, Upload, Save, Edit } from 'lucide-react';
 import '../App.css';
 
 const IncomePage = ({ onBack }) => {
   const [incomeType, setIncomeType] = useState('');
   const [pizzaSize, setPizzaSize] = useState('');
   const [pizzaType, setPizzaType] = useState('');
-  const [pizzaFlavor, setPizzaFlavor] = useState('');
+  const [pizzaTopping, setPizzaTopping] = useState('');
   const [extraCheese, setExtraCheese] = useState(false);
   const [amount, setAmount] = useState('');
-  const [details, setDetails] = useState('');
+  const [description, setDescription] = useState('');
   const [receipt, setReceipt] = useState(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [message, setMessage] = useState('');
   const [isEditing, setIsEditing] = useState(false);
 
   const pizzaSizes = {
@@ -51,15 +54,70 @@ const IncomePage = ({ onBack }) => {
     return basePrice;
   };
 
-  const handleSave = () => {
-    if (!amount || amount <= 0) {
-      alert('ກະລຸນາປ້ອນຈຳນວນເງິນທີ່ຖືກຕ້ອງ');
-      return;
+  // Auto-calculate amount when pizza details change
+  useEffect(() => {
+    if (incomeType === 'ໄດ້ຮັບຈາກການຂາຍພິຊຊ່າ' && pizzaSize && pizzaType) {
+      const calculatedPrice = calculatePizzaPrice();
+      setAmount(calculatedPrice.toString());
+    }
+  }, [pizzaSize, pizzaType, extraCheese, incomeType]);
+
+  const handleSave = async () => {
+    // For pizza sales, ensure all pizza details are filled
+    if (incomeType === 'ໄດ້ຮັບຈາກການຂາຍພິຊຊ່າ') {
+      if (!pizzaSize || !pizzaType || !amount) {
+        setMessage('ກະລຸນາເລືອກຂໍ້ມູນພິຊຊ່າໃຫ້ຄົບຖ້ວນ');
+        return;
+      }
+    } else {
+      if (!incomeType || !amount) {
+        setMessage('ກະລຸນາປ້ອນຂໍ້ມູນໃຫ້ຄົບຖ້ວນ');
+        return;
+      }
     }
 
-    // Save logic here
-    alert('ບັນທຶກລາຍຮັບສຳເລັດ!');
-    onBack();
+    setIsLoading(true);
+    setMessage('');
+
+    try {
+      const incomeData = {
+        type: incomeType,
+        amount: parseFloat(amount),
+        description: description || '',
+        ...(incomeType === 'ໄດ້ຮັບຈາກການຂາຍພິຊຊ່າ' && {
+          pizzaDetails: {
+            size: pizzaSize,
+            type: pizzaType,
+            topping: pizzaTopping,
+            extraCheese: extraCheese
+          }
+        })
+      };
+
+      const result = await addIncome(incomeData);
+      
+      if (result.success) {
+        setMessage('ບັນທຶກລາຍຮັບສຳເລັດ!');
+        // Reset form
+        setIncomeType('');
+        setPizzaSize('');
+        setPizzaType('');
+        setPizzaTopping('');
+        setExtraCheese(false);
+        setAmount('');
+        setDescription('');
+        setReceipt(null);
+        
+        // Auto hide message after 3 seconds
+        setTimeout(() => setMessage(''), 3000);
+      } else {
+        setMessage('ເກີດຂໍ້ຜິດພາດ: ' + result.error);
+      }
+    } catch (error) {
+      setMessage('ເກີດຂໍ້ຜິດພາດ: ' + error.message);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleFileUpload = (event) => {
@@ -139,7 +197,7 @@ const IncomePage = ({ onBack }) => {
               {/* Pizza Flavor */}
               <div>
                 <label className="block text-sm font-medium mb-2">ລາຍການໜ້າ:</label>
-                <Select value={pizzaFlavor} onValueChange={setPizzaFlavor}>
+                <Select value={pizzaTopping} onValueChange={setPizzaTopping}>
                   <SelectTrigger>
                     <SelectValue placeholder="ເລືອກໜ້າພິຊຊ່າ" />
                   </SelectTrigger>
@@ -192,8 +250,8 @@ const IncomePage = ({ onBack }) => {
           <div>
             <label className="block text-sm font-medium mb-2">ລາຍລະອຽດ:</label>
             <Textarea
-              value={details}
-              onChange={(e) => setDetails(e.target.value)}
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
               placeholder="ປ້ອນລາຍລະອຽດເພີ່ມເຕີມ"
               rows={3}
             />
@@ -226,14 +284,22 @@ const IncomePage = ({ onBack }) => {
             </div>
           </div>
 
+          {/* Message Display */}
+          {message && (
+            <div className={`p-3 rounded-lg ${message.includes('ສຳເລັດ') ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+              {message}
+            </div>
+          )}
+
           {/* Action Buttons */}
           <div className="flex space-x-2 pt-4">
             <Button
               onClick={handleSave}
-              className="flex-1 bg-green-600 hover:bg-green-700 text-white"
+              disabled={isLoading}
+              className="flex-1 bg-green-600 hover:bg-green-700 text-white disabled:opacity-50"
             >
               <Save className="h-4 w-4 mr-2" />
-              ບັນທຶກ
+              {isLoading ? 'ກຳລັງບັນທຶກ...' : 'ບັນທຶກ'}
             </Button>
             <Button
               onClick={() => setIsEditing(!isEditing)}
