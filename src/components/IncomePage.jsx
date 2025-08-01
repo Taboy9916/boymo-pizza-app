@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { ArrowLeft, Upload, Save, Edit } from 'lucide-react';
 import { addIncome } from '../firebase/firestore';
+import { getTranslation } from '../utils/translations.js';
+import { useLanguage } from '../contexts/LanguageContext.jsx';
 import { Button } from '@/components/ui/button.jsx';
 import { Input } from '@/components/ui/input.jsx';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card.jsx';
@@ -8,70 +10,89 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea.jsx';
 import '../App.css';
 
-const IncomePage = ({ onBack }) => {
+const IncomePage = ({ onBack, onSaveSuccess }) => {
+  const { language } = useLanguage();
   const [incomeType, setIncomeType] = useState('');
+  const [amount, setAmount] = useState('');
+  const [description, setDescription] = useState('');
+  const [receiptFile, setReceiptFile] = useState(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [message, setMessage] = useState('');
+
+  // Pizza specific states
   const [pizzaSize, setPizzaSize] = useState('');
   const [pizzaType, setPizzaType] = useState('');
   const [pizzaTopping, setPizzaTopping] = useState('');
   const [extraCheese, setExtraCheese] = useState(false);
-  const [amount, setAmount] = useState('');
-  const [description, setDescription] = useState('');
-  const [receipt, setReceipt] = useState(null);
-  const [isLoading, setIsLoading] = useState(false);
-  const [message, setMessage] = useState('');
-  const [isEditing, setIsEditing] = useState(false);
 
-  const pizzaSizes = {
-    '6': { regular: 65000, seafood: 79000 },
-    '7': { regular: 85000, seafood: 99000 },
-    '9': { regular: 129000, seafood: 139000 },
-    '10': { regular: 149000, seafood: 159000 }
-  };
-
-  const pizzaFlavors = [
-    'ໜ້າລວມມິດຊາລາຍ',
-    'ໜ້າຮັອດດ໋ອກຊີສ',
-    'ໜ້າເຂົ້າໂພດຫວານ',
-    'ໜ້າປູອັດ+ຊີສ',
-    'ໜ້າເບຄ້ອນເດິລຸກ',
-    'ໜ້າຜັກໂຂມໝາກເຂືອເທດ',
-    'ໜ້າຕົ້ມຍຳກຸ້ງ',
-    'ໜ້າກຸ້ງເດິລຸກ',
-    'ໜ້າແຮມຊີສ',
-    'ໜ້າປູອັດ',
-    'ໜ້າຮັອດດ໋ອກ',
-    'ໜ້າດັບເບີ້ນຊີສ',
-    'ໜ້າເບຄ່ອນຊີສ',
-    'ໜ້າຮາວາອ້ຽນ',
-    'ໜ້າຊີຟູດລວມສະໄປຣຊີ່',
-    'ໜ້າລວມໝາກໄມ້'
+  const incomeTypes = [
+    getTranslation(language, "income_pizza_sales"),
+    getTranslation(language, "income_salary"),
+    getTranslation(language, "income_from_mother"),
+    getTranslation(language, "income_other"),
   ];
 
+  const pizzaSizes = [
+    { value: 'S', label: 'S (25,000 Kip)' },
+    { value: 'M', label: 'M (35,000 Kip)' },
+    { value: 'L', label: 'L (45,000 Kip)' },
+    { value: 'XL', label: 'XL (55,000 Kip)' },
+  ];
+
+  const pizzaTypes = [
+    { value: 'regular', label: getTranslation(language, "regular_topping") },
+    { value: 'seafood', label: getTranslation(language, "seafood_topping") },
+  ];
+
+  const pizzaToppings = [
+    { value: 'pepperoni', label: 'Pepperoni' },
+    { value: 'chicken', label: 'Chicken' },
+    { value: 'mushroom', label: 'Mushroom' },
+    { value: 'pineapple', label: 'Pineapple' },
+  ];
+
+  const handleAmountChange = (e) => {
+    const value = e.target.value;
+    if (/^\d*\.?\d*$/.test(value)) {
+      setAmount(value);
+    }
+  };
+
+  const handleFileChange = (e) => {
+    setReceiptFile(e.target.files[0]);
+  };
+
   const calculatePizzaPrice = () => {
-    if (!pizzaSize || !pizzaType) return 0;
-    let basePrice = pizzaSizes[pizzaSize][pizzaType];
+    let basePrice = 0;
+    switch (pizzaSize) {
+      case 'S': basePrice = 25000; break;
+      case 'M': basePrice = 35000; break;
+      case 'L': basePrice = 45000; break;
+      case 'XL': basePrice = 55000; break;
+      default: basePrice = 0; break;
+    }
+    if (pizzaType === 'seafood') basePrice += 10000; // Seafood premium
     if (extraCheese) basePrice += 15000;
     return basePrice;
   };
 
   // Auto-calculate amount when pizza details change
   useEffect(() => {
-    if (incomeType === 'ໄດ້ຮັບຈາກການຂາຍພິຊຊ່າ' && pizzaSize && pizzaType) {
+    if (incomeType === getTranslation(language, "income_pizza_sales") && pizzaSize && pizzaType) {
       const calculatedPrice = calculatePizzaPrice();
       setAmount(calculatedPrice.toString());
     }
-  }, [pizzaSize, pizzaType, extraCheese, incomeType]);
+  }, [pizzaSize, pizzaType, extraCheese, incomeType, language]);
 
   const handleSave = async () => {
-    // For pizza sales, ensure all pizza details are filled
-    if (incomeType === 'ໄດ້ຮັບຈາກການຂາຍພິຊຊ່າ') {
+    if (incomeType === getTranslation(language, "income_pizza_sales")) {
       if (!pizzaSize || !pizzaType || !amount) {
-        setMessage('ກະລຸນາເລືອກຂໍ້ມູນພິຊຊ່າໃຫ້ຄົບຖ້ວນ');
+        setMessage(getTranslation(language, "fill_all_pizza_fields"));
         return;
       }
     } else {
       if (!incomeType || !amount) {
-        setMessage('ກະລຸນາປ້ອນຂໍ້ມູນໃຫ້ຄົບຖ້ວນ');
+        setMessage(getTranslation(language, "fill_all_fields"));
         return;
       }
     }
@@ -83,47 +104,39 @@ const IncomePage = ({ onBack }) => {
       const incomeData = {
         type: incomeType,
         amount: parseFloat(amount),
-        description: description || '',
-        ...(incomeType === 'ໄດ້ຮັບຈາກການຂາຍພິຊຊ່າ' && {
+        description,
+        receiptUrl: receiptFile ? receiptFile.name : null, // Placeholder for actual upload
+        ...(incomeType === getTranslation(language, "income_pizza_sales") && {
           pizzaDetails: {
             size: pizzaSize,
             type: pizzaType,
             topping: pizzaTopping,
-            extraCheese: extraCheese
-          }
-        })
+            extraCheese: extraCheese,
+          },
+        }),
       };
-
       const result = await addIncome(incomeData);
-      
       if (result.success) {
-        setMessage('ບັນທຶກລາຍຮັບສຳເລັດ!');
-        // Reset form
+        setMessage(getTranslation(language, "save_success"));
         setIncomeType('');
+        setAmount('');
+        setDescription('');
+        setReceiptFile(null);
         setPizzaSize('');
         setPizzaType('');
         setPizzaTopping('');
         setExtraCheese(false);
-        setAmount('');
-        setDescription('');
-        setReceipt(null);
-        
-        // Auto hide message after 3 seconds
-        setTimeout(() => setMessage(''), 3000);
+        if (onSaveSuccess) {
+          onSaveSuccess();
+        }
       } else {
-        setMessage('ເກີດຂໍ້ຜິດພາດ: ' + result.error);
+        setMessage(getTranslation(language, "save_error") + result.error);
       }
     } catch (error) {
-      setMessage('ເກີດຂໍ້ຜິດພາດ: ' + error.message);
+      setMessage(getTranslation(language, "save_error") + error.message);
     } finally {
       setIsLoading(false);
-    }
-  };
-
-  const handleFileUpload = (event) => {
-    const file = event.target.files[0];
-    if (file) {
-      setReceipt(file);
+      setTimeout(() => setMessage(''), 3000);
     }
   };
 
@@ -137,184 +150,185 @@ const IncomePage = ({ onBack }) => {
           className="bg-purple-100 border-purple-300 text-purple-700 hover:bg-purple-200"
         >
           <ArrowLeft className="h-4 w-4 mr-2" />
-          ຍ້ອນກັບ
+          {getTranslation(language, "back")}
         </Button>
-        <h1 className="text-xl font-bold text-white">ເພີ່ມລາຍຮັບ</h1>
+        <h1 className="text-xl font-bold text-white">{getTranslation(language, "add_income")}</h1>
         <div className="w-20"></div>
       </div>
 
-      <Card className="border-green-500 border-2">
+      {/* Income Form */}
+      <Card className="border-green-500 border-2 mb-6">
         <CardHeader>
-          <CardTitle className="text-green-700">ເລືອກປະເພດລາຍຮັບ</CardTitle>
+          <CardTitle className="text-green-700">{getTranslation(language, "type")}</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent>
           <Select value={incomeType} onValueChange={setIncomeType}>
             <SelectTrigger>
-              <SelectValue placeholder="ເລືອກປະເພດລາຍຮັບ" />
+              <SelectValue placeholder={getTranslation(language, "select_income_type_placeholder")} />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="pizza">ໄດ້ຮັບຈາກການຂາຍພິຊຊ່າ</SelectItem>
-              <SelectItem value="salary">ໄດ້ຮັບຈາກເງິນເດືອນ</SelectItem>
-              <SelectItem value="mother">ໄດ້ຮັບຈາກແມ່</SelectItem>
-              <SelectItem value="other">ໄດ້ຮັບຈາກອື່ນໆ</SelectItem>
+              {incomeTypes.map((type) => (
+                <SelectItem key={type} value={type}>
+                  {type}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
-
-          {incomeType === 'pizza' && (
-            <div className="space-y-4 p-4 bg-green-50 rounded-lg">
-              <h3 className="font-semibold text-green-800">ລາຍລະອຽດພິຊຊ່າ</h3>
-              
-              {/* Pizza Size */}
-              <div>
-                <label className="block text-sm font-medium mb-2">ຂະໜາດ:</label>
-                <Select value={pizzaSize} onValueChange={setPizzaSize}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="ເລືອກຂະໜາດ" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="6">6 ນິ້ວ</SelectItem>
-                    <SelectItem value="7">7 ນິ້ວ</SelectItem>
-                    <SelectItem value="9">9 ນິ້ວ</SelectItem>
-                    <SelectItem value="10">10 ນິ້ວ</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {/* Pizza Type */}
-              <div>
-                <label className="block text-sm font-medium mb-2">ປະເພດ:</label>
-                <Select value={pizzaType} onValueChange={setPizzaType}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="ເລືອກປະເພດ" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="regular">ໜ້າທຳມະດາ</SelectItem>
-                    <SelectItem value="seafood">ໜ້າທະເລ</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {/* Pizza Flavor */}
-              <div>
-                <label className="block text-sm font-medium mb-2">ລາຍການໜ້າ:</label>
-                <Select value={pizzaTopping} onValueChange={setPizzaTopping}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="ເລືອກໜ້າພິຊຊ່າ" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {pizzaFlavors.map((flavor, index) => (
-                      <SelectItem key={index} value={flavor}>{flavor}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {/* Extra Cheese */}
-              <div className="flex items-center space-x-2">
-                <input
-                  type="checkbox"
-                  id="extraCheese"
-                  checked={extraCheese}
-                  onChange={(e) => setExtraCheese(e.target.checked)}
-                  className="rounded"
-                />
-                <label htmlFor="extraCheese" className="text-sm font-medium">
-                  ເພີ່ມຊີສ (+15,000 ກີບ)
-                </label>
-              </div>
-
-              {/* Calculated Price */}
-              {pizzaSize && pizzaType && (
-                <div className="p-3 bg-green-100 rounded-lg">
-                  <p className="font-semibold text-green-800">
-                    ລາຄາ: {calculatePizzaPrice().toLocaleString()} ກີບ
-                  </p>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Amount Input */}
-          <div>
-            <label className="block text-sm font-medium mb-2">ຈຳນວນເງິນ (ກີບ):</label>
-            <Input
-              type="number"
-              value={amount}
-              onChange={(e) => setAmount(e.target.value)}
-              placeholder={incomeType === 'pizza' ? calculatePizzaPrice().toString() : "ປ້ອນຈຳນວນເງິນ"}
-              className="w-full"
-            />
-          </div>
-
-          {/* Details */}
-          <div>
-            <label className="block text-sm font-medium mb-2">ລາຍລະອຽດ:</label>
-            <Textarea
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="ປ້ອນລາຍລະອຽດເພີ່ມເຕີມ"
-              rows={3}
-            />
-          </div>
-
-          {/* Receipt Upload */}
-          <div>
-            <label className="block text-sm font-medium mb-2">ອັບໂຫຼດໃບບິນ:</label>
-            <div className="flex items-center space-x-2">
-              <input
-                type="file"
-                accept="image/*"
-                onChange={handleFileUpload}
-                className="hidden"
-                id="receipt-upload"
-              />
-              <Button
-                onClick={() => document.getElementById('receipt-upload').click()}
-                variant="outline"
-                className="flex items-center space-x-2"
-              >
-                <Upload className="h-4 w-4" />
-                <span>ເລືອກໄຟລ໌</span>
-              </Button>
-              {receipt && (
-                <span className="text-sm text-green-600">
-                  ເລືອກໄຟລ໌: {receipt.name}
-                </span>
-              )}
-            </div>
-          </div>
-
-          {/* Message Display */}
-          {message && (
-            <div className={`p-3 rounded-lg ${message.includes('ສຳເລັດ') ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
-              {message}
-            </div>
-          )}
-
-          {/* Action Buttons */}
-          <div className="flex space-x-2 pt-4">
-            <Button
-              onClick={handleSave}
-              disabled={isLoading}
-              className="flex-1 bg-green-600 hover:bg-green-700 text-white disabled:opacity-50"
-            >
-              <Save className="h-4 w-4 mr-2" />
-              {isLoading ? 'ກຳລັງບັນທຶກ...' : 'ບັນທຶກ'}
-            </Button>
-            <Button
-              onClick={() => setIsEditing(!isEditing)}
-              variant="outline"
-              className="flex items-center space-x-2"
-            >
-              <Edit className="h-4 w-4" />
-              <span>ແກ້ໄຂ</span>
-            </Button>
-          </div>
         </CardContent>
       </Card>
+
+      {incomeType === getTranslation(language, "income_pizza_sales") && (
+        <Card className="border-orange-500 border-2 mb-6">
+          <CardHeader>
+            <CardTitle className="text-orange-700">{getTranslation(language, "pizza_details")}</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {/* Pizza Size */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">{getTranslation(language, "size")}</label>
+              <Select value={pizzaSize} onValueChange={setPizzaSize}>
+                <SelectTrigger>
+                  <SelectValue placeholder={getTranslation(language, "select_size_placeholder")} />
+                </SelectTrigger>
+                <SelectContent>
+                  {pizzaSizes.map((size) => (
+                    <SelectItem key={size.value} value={size.value}>
+                      {size.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Pizza Type */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">{getTranslation(language, "type")}</label>
+              <Select value={pizzaType} onValueChange={setPizzaType}>
+                <SelectTrigger>
+                  <SelectValue placeholder={getTranslation(language, "select_type_placeholder")} />
+                </SelectTrigger>
+                <SelectContent>
+                  {pizzaTypes.map((type) => (
+                    <SelectItem key={type.value} value={type.value}>
+                      {type.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Pizza Topping */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">{getTranslation(language, "topping_list")}</label>
+              <Select value={pizzaTopping} onValueChange={setPizzaTopping}>
+                <SelectTrigger>
+                  <SelectValue placeholder={getTranslation(language, "select_pizza_topping_placeholder")} />
+                </SelectTrigger>
+                <SelectContent>
+                  {pizzaToppings.map((topping) => (
+                    <SelectItem key={topping.value} value={topping.value}>
+                      {topping.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Extra Cheese */}
+            <div className="flex items-center space-x-2">
+              <input
+                type="checkbox"
+                id="extraCheese"
+                checked={extraCheese}
+                onChange={(e) => setExtraCheese(e.target.checked)}
+                className="h-4 w-4 text-green-600 focus:ring-green-500 border-gray-300 rounded"
+              />
+              <label htmlFor="extraCheese" className="text-sm font-medium text-gray-700">
+                {getTranslation(language, "add_extra_cheese")}
+              </label>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      <Card className="border-blue-500 border-2 mb-6">
+        <CardHeader>
+          <CardTitle className="text-blue-700">{getTranslation(language, "amount")} ({getTranslation(language, "kip")})</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <Input
+            type="number"
+            placeholder={getTranslation(language, "amount")}
+            value={amount}
+            onChange={handleAmountChange}
+            className="flex-1"
+            disabled={incomeType === getTranslation(language, "income_pizza_sales")}
+          />
+          <p className="text-sm text-gray-500 mt-2">{getTranslation(language, "enter_numbers_only")}</p>
+          {incomeType === getTranslation(language, "income_pizza_sales") && (
+            <p className="text-sm text-gray-500 mt-2">{getTranslation(language, "price")}: {calculatePizzaPrice().toLocaleString()} {getTranslation(language, "kip")}</p>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card className="border-purple-500 border-2 mb-6">
+        <CardHeader>
+          <CardTitle className="text-purple-700">{getTranslation(language, "description")}</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <Textarea
+            placeholder={getTranslation(language, "enter_description")}
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            rows="3"
+          />
+        </CardContent>
+      </Card>
+
+      <Card className="border-orange-500 border-2 mb-6">
+        <CardHeader>
+          <CardTitle className="text-orange-700">{getTranslation(language, "upload_receipt")}</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <input
+            type="file"
+            accept="image/*,application/pdf"
+            onChange={handleFileChange}
+            className="hidden"
+            id="receipt-upload"
+          />
+          <Button
+            onClick={() => document.getElementById('receipt-upload').click()}
+            variant="outline"
+            className="w-full"
+          >
+            {getTranslation(language, "select_file")}
+          </Button>
+          {receiptFile && (
+            <p className="text-sm text-gray-600 mt-2">{getTranslation(language, "file_selected")}: {receiptFile.name}</p>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Message Display */}
+      {message && (
+        <div className={p-3 rounded-lg ${message.includes(getTranslation(language, "save_success")) ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"}}>
+          {message}
+        </div>
+      )}
+
+      {/* Save Button */}
+      <div className="fixed bottom-4 left-4 right-4">
+        <Button
+          onClick={handleSave}
+          disabled={isLoading}
+          className="w-full bg-green-600 hover:bg-green-700 text-white py-3"
+        >
+          {isLoading ? getTranslation(language, "saving") : getTranslation(language, "add_income")}
+        </Button>
+      </div>
     </div>
   );
 };
 
 export default IncomePage;
-
