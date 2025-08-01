@@ -1,61 +1,102 @@
-import { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { ArrowLeft, Camera, Save } from 'lucide-react';
+import { getAuth, onAuthStateChanged } from 'firebase/auth';
+import { doc, getDoc } from 'firebase/firestore';
+import { db, storage } from '../firebase/config';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { updateProfile } from '../firebase/firestore';
+import { getTranslation } from '../utils/translations.js';
+import { useLanguage } from '../contexts/LanguageContext.jsx';
 import { Button } from '@/components/ui/button.jsx';
 import { Input } from '@/components/ui/input.jsx';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card.jsx';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select.jsx';
-import { Badge } from '@/components/ui/badge.jsx';
-import { ArrowLeft, Camera, Save, Settings, Store, Globe, MessageSquare } from 'lucide-react';
+import { Textarea } from '@/components/ui/textarea.jsx';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar.jsx';
+import { Label } from '@/components/ui/label.jsx';
+import { Switch } from '@/components/ui/switch.jsx';
 import '../App.css';
 
 const ProfilePage = ({ onBack }) => {
-  const [profileImage, setProfileImage] = useState(null);
-  const [nickname, setNickname] = useState('ບອຍ');
-  const [storeStatus, setStoreStatus] = useState('ເປີດ');
-  const [selectedLanguage, setSelectedLanguage] = useState('lo');
-  const [isEditing, setIsEditing] = useState(false);
+  const { language, changeLanguage } = useLanguage();
+  const [user, setUser] = useState(null);
+  const [nickname, setNickname] = useState("");
+  const [profileImageUrl, setProfileImageUrl] = useState("");
+  const [storeStatus, setStoreStatus] = useState("open");
+  const [feedback, setFeedback] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+  const [message, setMessage] = useState("");
 
-  const languages = [
-    { code: 'lo', name: 'ລາວ', flag: '🇱🇦' },
-    { code: 'th', name: 'ໄທ', flag: '🇹🇭' },
-    { code: 'zh', name: 'ຈີນ', flag: '🇨🇳' },
-    { code: 'en', name: 'ອັງກິດ', flag: '🇺🇸' },
-    { code: 'vi', name: 'ຫວຽດນາມ', flag: '🇻🇳' }
-  ];
+  const auth = getAuth();
 
-  const storeStatuses = [
-    { value: 'ເປີດ', color: 'bg-green-500', label: 'ເປີດ' },
-    { value: 'ປິດ', color: 'bg-red-500', label: 'ປິດ' },
-    { value: 'ປັບປຸງ', color: 'bg-yellow-500', label: 'ປັບປຸງ' },
-    { value: 'ພັກວັນບຸນ', color: 'bg-blue-500', label: 'ພັກວັນບຸນ' }
-  ];
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+      if (currentUser) {
+        setUser(currentUser);
+        const userDocRef = doc(db, "users", currentUser.uid);
+        const userDocSnap = await getDoc(userDocRef);
+        if (userDocSnap.exists()) {
+          const userData = userDocSnap.data();
+          setNickname(userData.nickname || "");
+          setProfileImageUrl(userData.profileImageUrl || "");
+          setStoreStatus(userData.storeStatus || "open");
+          setFeedback(userData.feedback || "");
+        }
+      } else {
+        setUser(null);
+      }
+    });
+    return () => unsubscribe();
+  }, [auth]);
 
-  const handleImageUpload = (event) => {
-    const file = event.target.files[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        setProfileImage(e.target.result);
-      };
-      reader.readAsDataURL(file);
+  const handleImageChange = async (e) => {
+    const file = e.target.files[0];
+    if (file && user) {
+      setIsLoading(true);
+      try {
+        const storageRef = ref(storage, profile_images/${user.uid});
+        await uploadBytes(storageRef, file);
+        const url = await getDownloadURL(storageRef);
+        setProfileImageUrl(url);
+        setMessage(getTranslation(language, "save_success"));
+      } catch (error) {
+        setMessage(getTranslation(language, "save_error") + error.message);
+      } finally {
+        setIsLoading(false);
+        setTimeout(() => setMessage(""), 3000);
+      }
     }
   };
 
-  const handleSave = () => {
-    // Save logic here
-    alert('ບັນທຶກການປ່ຽນແປງສຳເລັດ!');
-    setIsEditing(false);
-  };
+  const handleSaveChanges = async () => {
+    if (!user) return;
 
-  const getCurrentLanguage = () => {
-    return languages.find(lang => lang.code === selectedLanguage);
-  };
+    setIsLoading(true);
+    setMessage("");
 
-  const getCurrentStatus = () => {
-    return storeStatuses.find(status => status.value === storeStatus);
+    try {
+      const profileData = {
+        nickname,
+        profileImageUrl,
+        storeStatus,
+        feedback,
+      };
+      const result = await updateProfile(user.uid, profileData);
+      if (result.success) {
+        setMessage(getTranslation(language, "save_success"));
+      } else {
+        setMessage(getTranslation(language, "save_error") + result.error);
+      }
+    } catch (error) {
+      setMessage(getTranslation(language, "save_error") + error.message);
+    } finally {
+      setIsLoading(false);
+      setTimeout(() => setMessage(""), 3000);
+    }
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-green-800 to-green-900 p-4">
+    <div className="min-h-screen bg-gradient-to-br from-purple-800 to-purple-900 p-4">
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <Button 
@@ -64,197 +105,137 @@ const ProfilePage = ({ onBack }) => {
           className="bg-purple-100 border-purple-300 text-purple-700 hover:bg-purple-200"
         >
           <ArrowLeft className="h-4 w-4 mr-2" />
-          ຍ້ອນກັບ
+          {getTranslation(language, "back")}
         </Button>
-        <h1 className="text-xl font-bold text-white">ການຈັດການໂປຣໄຟລ໌</h1>
+        <h1 className="text-xl font-bold text-white">{getTranslation(language, "profile_management")}</h1>
         <div className="w-20"></div>
       </div>
 
-      {/* Profile Image */}
+      {/* Profile Management Form */}
       <Card className="border-purple-500 border-2 mb-6">
         <CardHeader>
-          <CardTitle className="text-purple-700 flex items-center">
-            <Camera className="h-5 w-5 mr-2" />
-            ຮູບໂປຣໄຟລ໌
-          </CardTitle>
+          <CardTitle className="text-purple-700">{getTranslation(language, "profile_image")}</CardTitle>
         </CardHeader>
-        <CardContent className="text-center">
-          <div className="relative inline-block">
-            <div className="w-32 h-32 bg-gray-200 rounded-full flex items-center justify-center mx-auto mb-4 overflow-hidden">
-              {profileImage ? (
-                <img 
-                  src={profileImage} 
-                  alt="Profile" 
-                  className="w-full h-full object-cover"
-                />
-              ) : (
-                <span className="text-6xl">👩‍🍳</span>
-              )}
-            </div>
-            <input
-              type="file"
-              accept="image/*"
-              onChange={handleImageUpload}
-              className="hidden"
-              id="profile-upload"
-            />
-            <Button
-              onClick={() => document.getElementById('profile-upload').click()}
-              variant="outline"
-              className="absolute bottom-0 right-0 rounded-full w-10 h-10 p-0"
-            >
-              <Camera className="h-4 w-4" />
-            </Button>
-          </div>
-          <p className="text-sm text-gray-600">ກົດເພື່ອປ່ຽນຮູບໂປຣໄຟລ໌</p>
+        <CardContent className="flex flex-col items-center">
+          <Avatar className="w-24 h-24 mb-4 border-2 border-purple-500">
+            <AvatarImage src={profileImageUrl} alt="Profile" />
+            <AvatarFallback>{user?.email ? user.email[0].toUpperCase() : "UN"}</AvatarFallback>
+          </Avatar>
+          <input
+            type="file"
+            accept="image/*"
+            onChange={handleImageChange}
+            className="hidden"
+            id="profile-image-upload"
+          />
+          <Button
+            onClick={() => document.getElementById("profile-image-upload").click()}
+            variant="outline"
+            className="bg-purple-100 border-purple-300 text-purple-700 hover:bg-purple-200"
+          >
+            <Camera className="h-4 w-4 mr-2" />
+            {getTranslation(language, "click_to_change_image")}
+          </Button>
         </CardContent>
       </Card>
 
-      {/* Nickname */}
-      <Card className="border-blue-500 border-2 mb-6">
+      <Card className="border-purple-500 border-2 mb-6">
         <CardHeader>
-          <CardTitle className="text-blue-700">ຊື່ຫຼິ້ນ</CardTitle>
+          <CardTitle className="text-purple-700">{getTranslation(language, "nickname")}</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="flex items-center space-x-2">
-            <Input
-              value={nickname}
-              onChange={(e) => setNickname(e.target.value)}
-              placeholder="ປ້ອນຊື່ຫຼິ້ນ"
-              disabled={!isEditing}
-              className="flex-1"
-            />
-            <Button
-              onClick={() => setIsEditing(!isEditing)}
-              variant="outline"
-              size="sm"
-            >
-              <Settings className="h-4 w-4" />
-            </Button>
-          </div>
+          <Input
+            placeholder={getTranslation(language, "enter_nickname")}
+            value={nickname}
+            onChange={(e) => setNickname(e.target.value)}
+          />
         </CardContent>
       </Card>
 
-      {/* Store Status */}
-      <Card className="border-orange-500 border-2 mb-6">
+      <Card className="border-purple-500 border-2 mb-6">
         <CardHeader>
-          <CardTitle className="text-orange-700 flex items-center">
-            <Store className="h-5 w-5 mr-2" />
-            ສະຖານະຮ້ານ
-          </CardTitle>
+          <CardTitle className="text-purple-700">{getTranslation(language, "current_status")}</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <span className="font-medium">ສະຖານະປັດຈຸບັນ:</span>
-              <Badge className={`${getCurrentStatus()?.color} text-white`}>
-                {storeStatus}
-              </Badge>
-            </div>
-            <Select value={storeStatus} onValueChange={setStoreStatus}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {storeStatuses.map((status) => (
-                  <SelectItem key={status.value} value={status.value}>
-                    <div className="flex items-center space-x-2">
-                      <div className={`w-3 h-3 rounded-full ${status.color}`}></div>
-                      <span>{status.label}</span>
-                    </div>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+          <Select value={storeStatus} onValueChange={setStoreStatus}>
+            <SelectTrigger>
+              <SelectValue placeholder={getTranslation(language, "store_status")} />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="open">{getTranslation(language, "open")}</SelectItem>
+              <SelectItem value="closed">{getTranslation(language, "closed")}</SelectItem>
+              <SelectItem value="renovating">{getTranslation(language, "renovating")}</SelectItem>
+              <SelectItem value="holiday">{getTranslation(language, "holiday")}</SelectItem>
+            </SelectContent>
+          </Select>
         </CardContent>
       </Card>
 
-      {/* Language Selection */}
-      <Card className="border-green-500 border-2 mb-6">
+      <Card className="border-purple-500 border-2 mb-6">
         <CardHeader>
-          <CardTitle className="text-green-700 flex items-center">
-            <Globe className="h-5 w-5 mr-2" />
-            ເລືອກພາສາ
-          </CardTitle>
+          <CardTitle className="text-purple-700">{getTranslation(language, "select_language")}</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <span className="font-medium">ພາສາປັດຈຸບັນ:</span>
-              <div className="flex items-center space-x-2">
-                <span className="text-2xl">{getCurrentLanguage()?.flag}</span>
-                <span>{getCurrentLanguage()?.name}</span>
-              </div>
-            </div>
-            <Select value={selectedLanguage} onValueChange={setSelectedLanguage}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {languages.map((lang) => (
-                  <SelectItem key={lang.code} value={lang.code}>
-                    <div className="flex items-center space-x-2">
-                      <span className="text-xl">{lang.flag}</span>
-                      <span>{lang.name}</span>
-                    </div>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+          <Select value={language} onValueChange={changeLanguage}>
+            <SelectTrigger>
+              <SelectValue placeholder={getTranslation(language, "select_language")} />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="lo">ລາວ</SelectItem>
+              <SelectItem value="th">ไทย</SelectItem>
+              <SelectItem value="en">English</SelectItem>
+            </SelectContent>
+          </Select>
+          <p className="text-sm text-gray-500 mt-2">{getTranslation(language, "current_language")}: {language}</p>
         </CardContent>
       </Card>
 
-      {/* Feedback Section */}
-      <Card className="border-indigo-500 border-2 mb-6">
+      <Card className="border-purple-500 border-2 mb-6">
         <CardHeader>
-          <CardTitle className="text-indigo-700 flex items-center">
-            <MessageSquare className="h-5 w-5 mr-2" />
-            Feedback ຈາກລູກຄ້າ
-          </CardTitle>
+          <CardTitle className="text-purple-700">{getTranslation(language, "feedback_from_customers")}</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="text-center py-8">
-            <MessageSquare className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-            <p className="text-gray-600">ຍັງບໍ່ມີ Feedback ຈາກລູກຄ້າ</p>
-            <p className="text-sm text-gray-500 mt-2">
-              ຟີເຈີນີ້ຈະຖືກເພີ່ມໃນອະນາຄົດ
-            </p>
-          </div>
+          <Textarea
+            placeholder={getTranslation(language, "no_feedback_yet")}
+            value={feedback}
+            onChange={(e) => setFeedback(e.target.value)}
+            rows="3"
+            disabled
+          />
+          <p className="text-sm text-gray-500 mt-2">{getTranslation(language, "feature_coming_soon")}</p>
         </CardContent>
       </Card>
 
-      {/* Developer Contact */}
-      <Card className="border-gray-500 border-2 mb-20">
+      <Card className="border-purple-500 border-2 mb-6">
         <CardHeader>
-          <CardTitle className="text-gray-700">ຂໍ້ມູນຜູ້ພັດທະນາ</CardTitle>
+          <CardTitle className="text-purple-700">{getTranslation(language, "developer_info")}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-2">
-          <div className="text-sm">
-            <p><strong>ຊື່:</strong> ທ້າວ ສົມຫວັງ ປິງສະນີໃຈ</p>
-            <p><strong>ຊື່ຫຼິ້ນ:</strong> ບອຍ</p>
-            <p><strong>ເບີໂທ/WhatsApp:</strong> 02054539859</p>
-            <p><strong>Gmail:</strong> somvang.pingsanijai14@gmail.com</p>
-          </div>
+          <p className="text-gray-700"><strong>{getTranslation(language, "name")}:</strong> {getTranslation(language, "developer_name")}</p>
+          <p className="text-gray-700"><strong>{getTranslation(language, "phone_whatsapp")}:</strong> {getTranslation(language, "developer_phone")}</p>
+          <p className="text-gray-700"><strong>{getTranslation(language, "gmail")}:</strong> {getTranslation(language, "developer_gmail")}</p>
         </CardContent>
       </Card>
 
-      {/* Save Button */}
-      {isEditing && (
-        <div className="fixed bottom-20 left-4 right-4">
-          <Button
-            onClick={handleSave}
-            className="w-full bg-purple-600 hover:bg-purple-700 text-white py-3"
-          >
-            <Save className="h-4 w-4 mr-2" />
-            ບັນທຶກການປ່ຽນແປງ
-          </Button>
+      {/* Message Display */}
+      {message && (
+        <div className={p-3 rounded-lg ${message.includes(getTranslation(language, "save_success")) ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"}}>
+          {message}
         </div>
       )}
+
+      {/* Save Button */}
+      <div className="fixed bottom-4 left-4 right-4">
+        <Button
+          onClick={handleSaveChanges}
+          disabled={isLoading}
+          className="w-full bg-purple-600 hover:bg-purple-700 text-white py-3"
+        >
+          {isLoading ? getTranslation(language, "saving") : getTranslation(language, "save_changes")}
+        </Button>
+      </div>
     </div>
   );
 };
 
 export default ProfilePage;
-
