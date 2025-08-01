@@ -5,7 +5,7 @@ import {
   query, 
   orderBy, 
   where, 
-  Timestamp,
+Timestamp,
   deleteDoc,
   doc,
   updateDoc
@@ -227,4 +227,20 @@ export const getFinancialSummary = async (period = 'today') => {
     return { success: false, error: error.message };
   }
 };
-
+export const getFinancialSummary = async (period = 'today') => {
+  // ... ໂຄ້ດທີ່ມີຢູ່ແລ້ວ ...
+};
+// Profile functions
+export const updateProfile = async (userId, profileData) => {
+  try {
+    const userRef = doc(db, "users", userId);
+    await updateDoc(userRef, {
+      ...profileData,
+      updatedAt: Timestamp.now()
+    });
+    return { success: true };
+  } catch (error) {
+    console.error("Error updating profile:", error);
+    return { success: false, error: error.message };
+  }
+};
