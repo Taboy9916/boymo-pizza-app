@@ -1,63 +1,49 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
+import { ArrowLeft } from 'lucide-react';
+import { getFinancialSummary } from '../firebase/firestore';
+import { getTranslation } from '../utils/translations.js';
+import { useLanguage } from '../contexts/LanguageContext.jsx';
 import { Button } from '@/components/ui/button.jsx';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card.jsx';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select.jsx';
-import { ArrowLeft, BarChart3, TrendingUp, DollarSign, Minus } from 'lucide-react';
-import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
-import { getFinancialSummary } from '../firebase/firestore.js';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import '../App.css';
 
 const ReportsPage = ({ onBack }) => {
-  const [reportPeriod, setReportPeriod] = useState('today');
-  const [financialData, setFinancialData] = useState({
-    income: 0,
-    expense: 0,
-    profit: 0,
-    chartData: []
-  });
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState('');
+  const { language } = useLanguage();
+  const [summary, setSummary] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [period, setPeriod] = useState('today');
 
-  // Fetch financial data when period changes
   useEffect(() => {
-    fetchFinancialData();
-  }, [reportPeriod]);
+    const fetchSummary = async () => {
+      setLoading(true);
+      const data = await getFinancialSummary(period);
+      setSummary(data);
+      setLoading(false);
+    };
+    fetchSummary();
+  }, [period]);
 
-  const fetchFinancialData = async () => {
-    setIsLoading(true);
-    setError('');
-    
-    try {
-      const result = await getFinancialSummary(reportPeriod);
-      
-      if (result.success) {
-        setFinancialData(result.data);
-      } else {
-        setError('ບໍ່ສາມາດດຶງຂໍ້ມູນໄດ້: ' + result.error);
-      }
-    } catch (error) {
-      setError('ເກີດຂໍ້ຜິດພາດ: ' + error.message);
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  const incomeExpenseData = summary ? [
+    { name: getTranslation(language, "total_income"), value: summary.totalIncome, color: '#82ca9d' },
+    { name: getTranslation(language, "total_expense"), value: summary.totalExpense, color: '#8884d8' },
+  ] : [];
 
-  const currentData = financialData;
+  const incomeByTypeData = summary ? Object.entries(summary.incomeByType).map(([type, amount]) => ({
+    name: type,
+    value: amount,
+  })) : [];
 
-  const pieData = [
-    { name: 'ລາຍຮັບ', value: currentData.income, color: '#10b981' },
-    { name: 'ລາຍຈ່າຍ', value: currentData.expense, color: '#ef4444' }
-  ];
+  const expenseByTypeData = summary ? Object.entries(summary.expenseByType).map(([type, amount]) => ({
+    name: type,
+    value: amount,
+  })) : [];
 
-  const periodLabels = {
-    today: 'ວັນນີ້',
-    week: 'ອາທິດນີ້',
-    month: 'ເດືອນນີ້',
-    year: 'ປີນີ້'
-  };
+  const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#A282CA', '#CA8282'];
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-green-800 to-green-900 p-4">
+    <div className="min-h-screen bg-gradient-to-br from-blue-800 to-blue-900 p-4">
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <Button 
@@ -66,166 +52,135 @@ const ReportsPage = ({ onBack }) => {
           className="bg-purple-100 border-purple-300 text-purple-700 hover:bg-purple-200"
         >
           <ArrowLeft className="h-4 w-4 mr-2" />
-          ຍ້ອນກັບ
+          {getTranslation(language, "back")}
         </Button>
-        <h1 className="text-xl font-bold text-white">ລາຍງານ</h1>
+        <h1 className="text-xl font-bold text-white">{getTranslation(language, "reports")}</h1>
         <div className="w-20"></div>
       </div>
 
-      {/* Period Selection */}
+      {/* Report Summary */}
       <Card className="border-blue-500 border-2 mb-6">
-        <CardContent className="p-4">
-          <div className="flex items-center space-x-4">
-            <BarChart3 className="h-5 w-5 text-blue-600" />
-            <span className="font-medium">ເລືອກໄລຍະເວລາ:</span>
-            <Select value={reportPeriod} onValueChange={setReportPeriod}>
-              <SelectTrigger className="w-40">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="today">ວັນນີ້</SelectItem>
-                <SelectItem value="week">ອາທິດນີ້</SelectItem>
-                <SelectItem value="month">ເດືອນນີ້</SelectItem>
-                <SelectItem value="year">ປີນີ້</SelectItem>
-              </SelectContent>
-            </Select>
-            {isLoading && <span className="text-sm text-gray-500">ກຳລັງໂຫຼດ...</span>}
-          </div>
+        <CardHeader>
+          <CardTitle className="text-blue-700">{getTranslation(language, "report_summary")}</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <Select value={period} onValueChange={setPeriod}>
+            <SelectTrigger>
+              <SelectValue placeholder={getTranslation(language, "select_report_period")} />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="today">{getTranslation(language, "today")}</SelectItem>
+              <SelectItem value="this_week">{getTranslation(language, "this_week")}</SelectItem>
+              <SelectItem value="this_month">{getTranslation(language, "this_month")}</SelectItem>
+              <SelectItem value="this_year">{getTranslation(language, "this_year")}</SelectItem>
+            </SelectContent>
+          </Select>
+          {loading ? (
+            <p>{getTranslation(language, "loading")}</p>
+          ) : summary ? (
+            <div className="mt-4 space-y-2">
+              <p>{getTranslation(language, "total_income")}: {summary.totalIncome.toLocaleString()} {getTranslation(language, "kip")}</p>
+              <p>{getTranslation(language, "total_expense")}: {summary.totalExpense.toLocaleString()} {getTranslation(language, "kip")}</p>
+              <p>{getTranslation(language, "net_profit")}: {(summary.totalIncome - summary.totalExpense).toLocaleString()} {getTranslation(language, "kip")}</p>
+            </div>
+          ) : (
+            <p>{getTranslation(language, "no_data_available")}</p>
+          )}
         </CardContent>
       </Card>
 
-      {/* Error Display */}
-      {error && (
-        <Card className="border-red-500 border-2 mb-6">
-          <CardContent className="p-4">
-            <div className="text-red-600">{error}</div>
-          </CardContent>
-        </Card>
-      )}
+      {/* Income vs Expense Chart */}
+      <Card className="border-green-500 border-2 mb-6">
+        <CardHeader>
+          <CardTitle className="text-green-700">{getTranslation(language, "income_vs_expense")}</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {summary && (summary.totalIncome > 0 || summary.totalExpense > 0) ? (
+            <ResponsiveContainer width="100%" height={300}>
+              <BarChart data={incomeExpenseData}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="name" />
+                <YAxis />
+                <Tooltip formatter={(value) => value.toLocaleString() + ` ${getTranslation(language, "kip")}`} />
+                <Legend />
+                <Bar dataKey="value" name={getTranslation(language, "amount")} >
+                  {incomeExpenseData.map((entry, index) => (
+                    <Cell key={cell-${index}} fill={entry.color} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          ) : (
+            <p>{getTranslation(language, "no_data_available")}</p>
+          )}
+        </CardContent>
+      </Card>
 
-      {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-        <Card className="border-green-500 border-2">
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-600">ລາຍຮັບ{periodLabels[reportPeriod]}</p>
-                <p className="text-2xl font-bold text-green-600">
-                  {currentData.income.toLocaleString()} ກີບ
-                </p>
-              </div>
-              <DollarSign className="h-8 w-8 text-green-600" />
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="border-red-500 border-2">
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-600">ລາຍຈ່າຍ{periodLabels[reportPeriod]}</p>
-                <p className="text-2xl font-bold text-red-600">
-                  {currentData.expense.toLocaleString()} ກີບ
-                </p>
-              </div>
-              <Minus className="h-8 w-8 text-red-600" />
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="border-blue-500 border-2">
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-600">ກຳໄລ{periodLabels[reportPeriod]}</p>
-                <p className="text-2xl font-bold text-blue-600">
-                  {currentData.profit.toLocaleString()} ກີບ
-                </p>
-              </div>
-              <TrendingUp className="h-8 w-8 text-blue-600" />
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Line Chart */}
+      {/* Income by Type Chart */}
       <Card className="border-purple-500 border-2 mb-6">
         <CardHeader>
-          <CardTitle className="text-purple-700">ກຣາຟເສັ້ນ - ລາຍຮັບ ແລະ ລາຍຈ່າຍ</CardTitle>
+          <CardTitle className="text-purple-700">{getTranslation(language, "income_by_type")}</CardTitle>
         </CardHeader>
         <CardContent>
-          <ResponsiveContainer width="100%" height={300}>
-            <LineChart data={currentData.chartData}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="name" />
-              <YAxis />
-              <Tooltip 
-                formatter={(value) => [`${value.toLocaleString()} ກີບ`]}
-                labelFormatter={(label) => `ເວລາ: ${label}`}
-              />
-              <Line 
-                type="monotone" 
-                dataKey="income" 
-                stroke="#10b981" 
-                strokeWidth={3}
-                name="ລາຍຮັບ"
-              />
-              <Line 
-                type="monotone" 
-                dataKey="expense" 
-                stroke="#ef4444" 
-                strokeWidth={3}
-                name="ລາຍຈ່າຍ"
-              />
-            </LineChart>
-          </ResponsiveContainer>
+          {incomeByTypeData.length > 0 ? (
+            <ResponsiveContainer width="100%" height={300}>
+              <PieChart>
+                <Pie
+                  data={incomeByTypeData}
+                  cx="50%"
+                  cy="50%"
+                  labelLine={false}
+                  outerRadius={80}
+                  fill="#8884d8"
+                  dataKey="value"
+                  nameKey="name"
+                  label={({ name, percent }) => ${name} (${(percent * 100).toFixed(0)}%)}
+                >
+                  {incomeByTypeData.map((entry, index) => (
+                    <Cell key={cell-${index}} fill={COLORS[index % COLORS.length]} />
+                  ))}
+                </Pie>
+                <Tooltip formatter={(value) => value.toLocaleString() + ` ${getTranslation(language, "kip")}`} />
+                <Legend />
+              </PieChart>
+            </ResponsiveContainer>
+          ) : (
+            <p>{getTranslation(language, "no_data_available")}</p>
+          )}
         </CardContent>
       </Card>
 
-      {/* Bar Chart */}
-      <Card className="border-orange-500 border-2 mb-6">
+      {/* Expense by Type Chart */}
+      <Card className="border-red-500 border-2 mb-6">
         <CardHeader>
-          <CardTitle className="text-orange-700">ກຣາຟແທ່ງ - ເປີຍບທຽບລາຍຮັບ ແລະ ລາຍຈ່າຍ</CardTitle>
+          <CardTitle className="text-red-700">{getTranslation(language, "expense_by_type")}</CardTitle>
         </CardHeader>
         <CardContent>
-          <ResponsiveContainer width="100%" height={300}>
-            <BarChart data={currentData.chartData}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="name" />
-              <YAxis />
-              <Tooltip 
-                formatter={(value) => [`${value.toLocaleString()} ກີບ`]}
-              />
-              <Bar dataKey="income" fill="#10b981" name="ລາຍຮັບ" />
-              <Bar dataKey="expense" fill="#ef4444" name="ລາຍຈ່າຍ" />
-            </BarChart>
-          </ResponsiveContainer>
-        </CardContent>
-      </Card>
-
-      {/* Pie Chart */}
-      <Card className="border-indigo-500 border-2 mb-20">
-        <CardHeader>
-          <CardTitle className="text-indigo-700">ກຣາຟວົງມົນ - ອັດຕາສ່ວນລາຍຮັບ ແລະ ລາຍຈ່າຍ</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <ResponsiveContainer width="100%" height={300}>
-            <PieChart>
-              <Pie
-                data={pieData}
-                cx="50%"
-                cy="50%"
-                outerRadius={80}
-                dataKey="value"
-                label={({ name, value }) => `${name}: ${value.toLocaleString()} ກີບ`}
-              >
-                {pieData.map((entry, index) => (
-                  <Cell key={`cell-${index}`} fill={entry.color} />
-                ))}
-              </Pie>
-              <Tooltip formatter={(value) => [`${value.toLocaleString()} ກີບ`]} />
-            </PieChart>
-          </ResponsiveContainer>
+          {expenseByTypeData.length > 0 ? (
+            <ResponsiveContainer width="100%" height={300}>
+              <PieChart>
+                <Pie
+                  data={expenseByTypeData}
+                  cx="50%"
+                  cy="50%"
+                  labelLine={false}
+                  outerRadius={80}
+                  fill="#8884d8"
+                  dataKey="value"
+                  nameKey="name"
+                  label={({ name, percent }) => ${name} (${(percent * 100).toFixed(0)}%)}
+                >
+                  {expenseByTypeData.map((entry, index) => (
+                    <Cell key={cell-${index}} fill={COLORS[index % COLORS.length]} />
+                  ))}
+                </Pie>
+                <Tooltip formatter={(value) => value.toLocaleString() + ` ${getTranslation(language, "kip")}`} />
+                <Legend />
+              </PieChart>
+            </ResponsiveContainer>
+          ) : (
+            <p>{getTranslation(language, "no_data_available")}</p>
+          )}
         </CardContent>
       </Card>
     </div>
@@ -233,4 +188,3 @@ const ReportsPage = ({ onBack }) => {
 };
 
 export default ReportsPage;
-
